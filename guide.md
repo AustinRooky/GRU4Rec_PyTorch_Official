@@ -67,7 +67,7 @@
             -t data/test.tsv \
             -m 1 5 10 20 \
             -e conservative \
-            -d cuda:0
+            -d cuda:0 
         ```
 
     （3）调参  
