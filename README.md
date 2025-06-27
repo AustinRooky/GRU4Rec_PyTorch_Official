@@ -426,3 +426,74 @@ Loading training data...
 ## Major updates
 ### Update 27-07-2023
 Initial version published.
+
+概览  
+  - 这是官方的 PyTorch 版本，功能与原始 Theano 代码等价并通过对照验证  
+  - 同作者还维护 Theano 与 TensorFlow 版本；若追求极致训练速度可用 Theano  
+  - 论文引用务必标注 [1] ICLR 2016 与 [2] CIKM 2018  
+  - 第三方复刻常缺特性或有实现缺陷，作者 2023 年论文 [3] 专门讨论了复现问题  
+
+主要差异  
+  • 去掉的超参数（均固定为最佳默认值）  
+      hidden_act=tanh, lmbd=0, smoothing=0, adapt=adagrad, grad_cap=0, …  
+      → 目的：简化接口、避免早期实验遗留选项  
+  • 改动的超参数  
+      - loss 仅剩 cross-entropy 与 bpr-max 两种  
+      - loss 决定最后激活；不再单独设置 final_act  
+      - elu_param 用于调节 ELU；设 0 即退化为线性  
+  • 训练速度  
+      - PyTorch 相比 Theano 慢 1.5–4 ×（小 batch / 小 layer 时更明显）  
+      - 原因：Theano 把整个图一次性编译成 C++/CUDA，Python 开销极低  
+      - PyTorch 2 编译对稀疏嵌入暂不奏效  
+      - 与官方 TensorFlow 速度大致相当  
+
+使用 run.py（训练 / 评测 / 保存加载）  
+  基本命令  
+    python run.py 训练集路径 -t 测试集路径 -ps "param1=...,param2=..." -d cuda:0  
+  常用参数速查  
+    layers           隐层维度列表，如 100/100  
+    batch_size       32–256，一般 80–240  
+    dropout_p_embed  嵌入 dropout  
+    dropout_p_hidden RNN 隐层 dropout  
+    learning_rate    0.01–0.25（Adagrad）  
+    momentum         Nesterov 动量（Adagrad 专用实现）  
+    n_sample         负采样数，典型 2048  
+    sample_alpha     采样分布幂次 0–1  
+    bpreg            BPR-max 正则系数  
+    constrained_embedding True=共享嵌入  
+    elu_param        >0 用 ELU；0 用线性  
+    loss             cross-entropy 或 bpr-max  
+    n_epochs         默认 10  
+  功能提示  
+    -pf cfg.py       用文件写 OrderedDict 参数  
+    -l               仅加载已训模型评测  
+    -m 1 5 10 20     评测 cut-off 列表  
+    -e conservative  处理打分并列的保守评测模式  
+
+数据与评测  
+  • 面向短 Session 的「会话推荐」场景；每条 Session 隐状态零起  
+  • 若要做「长序列个性化推荐」，需自己扩展：  
+      ① 长序列可配合 BPTT ② 评测时需继承训练末隐状态  
+  • 公开数据集：RSC15, Yoochoose, Rees46, Coveo, RetailRocket, Diginetica  
+  • 只在真正有序列模式的数据上评测；评分数据不适合  
+
+复现实验  
+  - 作者给出了预处理脚本与最佳超参文件（paramfiles 目录）  
+  - 表格列出各数据集 Recall/MRR@1/5/10/20，可接受少量浮动  
+  - 训练时先用 train_tr / train_valid 做调参，再全量 train_full 训练 → test  
+
+超参数优化 (paropt.py)  
+  • 基于 Optuna；自带若干搜索空间 JSON  
+  • 建议：  
+      − 每个数据集 × embedding 模式 × loss 各跑 100–200 trial  
+      − 固定 n_sample=2048, n_epochs=10, logq=loss?1:0  
+      − 小数据更偏向 BPR-max，大数据更偏向 cross-entropy  
+  • 典型命令：  
+      python paropt.py train_tr valid -opf space.json -fp "固定参数串" -n 200  
+
+依赖  
+  python ≥3.8, numpy 1.19+, pandas 1.3+, pytorch 1.12+cu113  
+  optuna 3.x（可选，仅调参用）  
+
+许可证  
+  最终 License 待补；临时沿用原 Theano 版本：科研/教学免费，商业需联系作者  
